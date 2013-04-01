@@ -2,6 +2,8 @@
 using NLog;
 using NLog.Targets;
 using Newtonsoft.Json;
+using System.Net.Sockets;
+using System;
 
 namespace Gelf4NLog.Target
 {
@@ -16,12 +18,14 @@ namespace Gelf4NLog.Target
 
         public string Facility { get; set; }
 
+        public ProtocolType Protocol { get; set; }
+
         public IConverter Converter { get; private set; }
         public ITransport Transport { get; private set; }
 
         public NLogTarget()
         {
-            Transport = new UdpTransport(new UdpTransportClient());
+            Protocol = ProtocolType.Udp;
             Converter = new GelfConverter();
         }
 
@@ -38,6 +42,18 @@ namespace Gelf4NLog.Target
 
         protected override void Write(LogEventInfo logEvent)
         {
+            switch (Protocol)
+            {
+                case ProtocolType.Udp:
+                    Transport = new UdpTransport(new UdpTransportClient());
+                    break;
+                case ProtocolType.Tcp:
+                    Transport = new TcpTransport(new TcpTransportClient());
+                    break;
+                default:
+                    throw new NLog.NLogConfigurationException(string.Format("Protocol '{0}' not supported.", Protocol));
+            }
+
             var jsonObject = Converter.GetGelfJson(logEvent, Facility);
             if (jsonObject == null) return;
             Transport.Send(HostIp, HostPort, jsonObject.ToString(Formatting.None, null));
